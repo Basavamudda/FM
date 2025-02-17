@@ -1,0 +1,70 @@
+import torch
+import torch.nn as nn
+
+class FoundationModel(nn.Module):
+    def __init__(self, input_dim, hidden_dim, num_layers, output_dim, dropout=0.0):
+        super(FoundationModel, self).__init__()
+
+        self.embedding = nn.Embedding(input_dim, hidden_dim)  # For discrete inputs like text tokens
+        self.layers = nn.ModuleList()
+
+        for _ in range(num_layers):
+            self.layers.append(
+                nn.Sequential(
+                    nn.Linear(hidden_dim, hidden_dim * 4),  # Example: 4x expansion factor
+                    nn.GELU(), # Or ReLU, SiLU, etc. Activation function
+                    nn.Dropout(dropout),
+                    nn.Linear(hidden_dim * 4, hidden_dim),
+                    nn.Dropout(dropout)
+                )
+            )
+
+        self.output_layer = nn.Linear(hidden_dim, output_dim)  # Output layer
+
+    def forward(self, x):
+        if isinstance(x, torch.LongTensor): # Check if it's discrete input
+            x = self.embedding(x) # Embed discrete input
+        # If it's continuous input, it's assumed to be pre-processed
+        # and has the correct shape. No embedding needed.
+
+        for layer in self.layers:
+            x = x + layer(x)  # Residual connections: Crucial for deep networks
+        x = self.output_layer(x)
+        return x
+
+
+# Example Instantiation and Usage (for text-like input):
+vocab_size = 10000  # Example vocabulary size
+embedding_dim = 256
+num_hidden_layers = 6
+num_classes = 10  # Example: 10 output classes for classification
+
+model = FoundationModel(vocab_size, embedding_dim, num_hidden_layers, num_classes)
+
+# Example input (batch size 32, sequence length 64):
+input_sequence = torch.randint(0, vocab_size, (32, 64))
+
+# Example Forward pass
+output = model(input_sequence)
+print(output.shape)  # Output shape: torch.Size([32, 64, 10])
+
+
+# Example Instantiation and Usage (for continuous input):
+input_dim = 128 # Example input dimension
+output_dim = 1 # Example: regression task
+
+model_cont = FoundationModel(input_dim, embedding_dim, num_hidden_layers, output_dim) # Here, input_dim is the continuous input dim
+
+# Example input (batch size 32, input dim 128):
+input_continuous = torch.randn(32, 128)
+
+# Example Forward pass
+output_cont = model_cont(input_continuous)
+print(output_cont.shape)  # Output shape: torch.Size([32, 1])
+
+
+
+# Training loop (Illustrative - you'll need a proper dataset, loss function, optimizer, etc.):
+# Example loss function and optimizer
+criterion = nn.CrossEntropyLoss() # For classification
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
